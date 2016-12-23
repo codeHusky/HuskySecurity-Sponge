@@ -8,11 +8,13 @@ import com.maxmind.geoip2.record.Country;
 import com.maxmind.geoip2.record.Subdivision;
 import ninja.leaping.configurate.ConfigurationOptions;
 import ninja.leaping.configurate.commented.CommentedConfigurationNode;
+import ninja.leaping.configurate.hocon.HoconConfigurationLoader;
 import ninja.leaping.configurate.loader.ConfigurationLoader;
 import org.slf4j.Logger;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.command.args.GenericArguments;
 import org.spongepowered.api.command.spec.CommandSpec;
+import org.spongepowered.api.config.ConfigDir;
 import org.spongepowered.api.config.DefaultConfig;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.event.Listener;
@@ -20,6 +22,7 @@ import org.spongepowered.api.event.command.SendCommandEvent;
 import org.spongepowered.api.event.game.state.GameStartedServerEvent;
 import org.spongepowered.api.event.network.ClientConnectionEvent;
 import org.spongepowered.api.plugin.Plugin;
+import org.spongepowered.api.plugin.PluginContainer;
 import org.spongepowered.api.service.ban.BanService;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
@@ -29,10 +32,10 @@ import org.spongepowered.api.util.ban.BanTypes;
 import pw.codehusky.serverdefender.command.VerifyCommand;
 import pw.codehusky.serverdefender.password.PasswordManager;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
-import java.security.SecureRandom;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -47,12 +50,21 @@ public class ServerDefender {
     private Logger logger;
 
     @Inject
-    @DefaultConfig(sharedRoot = true)
+    @DefaultConfig(sharedRoot = false)
     private ConfigurationLoader<CommentedConfigurationNode> privateConfig;
+
+    @Inject
+    @ConfigDir(sharedRoot = false)
+    private Path saltConfigDir;
+    private File saltConfig;
+
+    @Inject
+    private PluginContainer pc;
 
     public HashMap<UUID,String[]> lastLoginData = new HashMap<>();
     public ArrayList<UUID> flagged = new ArrayList<>();
     public HashMap<UUID,String> passHashes = new HashMap<>();
+    public HashMap<UUID,String> passSalts = new HashMap<>();
     public PasswordManager pm = null;
     public Title secNotice = Title.of(Text.of(TextColors.RED, "Security Notice!"),Text.of("Check the chat for more info."));
     public String verifyPermission = "serverdefender.verify";
@@ -61,8 +73,10 @@ public class ServerDefender {
 
     @Listener
     public void gameStarted(GameStartedServerEvent event) throws IOException {
+        saltConfig = new File(saltConfigDir.toString() + File.separator + "NaCl.conf");
         readConfig();
-        pm= new PasswordManager(salt);
+        pm= new PasswordManager(this);
+
         salt = null;
         CommandSpec verifSpec = CommandSpec.builder()
                 .description(Text.of("Verify administrator accounts"))
@@ -76,6 +90,7 @@ public class ServerDefender {
         logger.info("Running.");
     }
     public void readConfig() {
+        readSalts();
         try {
             CommentedConfigurationNode cn = privateConfig.load();
             CommentedConfigurationNode lastNode = cn.getNode("lastLoginData");
@@ -85,20 +100,10 @@ public class ServerDefender {
                 lastLoginData.put(uid,data);
             }
             CommentedConfigurationNode salt = cn.getNode("salt");
-            if(salt.getValue() == null){
-                byte[] thing = new byte[16];
-                new SecureRandom().nextBytes(thing);
-                ByteBuffer wrapped = ByteBuffer.wrap(thing); // big-endian by default
-                short num = wrapped.getShort(); // 1
-                salt.setValue(num);
-                this.salt = thing;
-                cn.removeChild("hashes");
+            if(cn.getNode("lastVersion").getValue() == null){
+                //old version, merging
                 passHashes = new HashMap<>();
-            }else{
-                int potential = salt.getInt();
-                ByteBuffer dbuf = ByteBuffer.allocate(16);
-                dbuf.putInt(potential);
-                this.salt = dbuf.array();
+                cn.removeChild("hashes");
             }
             if(cn.getNode("hashes").getValue() != null) {
                 CommentedConfigurationNode hashNode = cn.getNode("hashes");
@@ -107,13 +112,14 @@ public class ServerDefender {
                     passHashes.put(uid,hashNode.getNode(puid).getString());
                 }
             }
-
+            cn.getNode("lastVersion").setValue(pc.getVersion().get());
             privateConfig.save(cn);
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
     public void updateConfig() {
+        updateSalts();
         try {
             ConfigurationOptions co = ConfigurationOptions.defaults().setShouldCopyDefaults(true);
             CommentedConfigurationNode cn = privateConfig.load(co);
@@ -128,7 +134,32 @@ public class ServerDefender {
             e.printStackTrace();
         }
     }
-
+    public void readSalts() {
+        try {
+            ConfigurationLoader<CommentedConfigurationNode> loader = HoconConfigurationLoader.builder().setFile(saltConfig).build();
+            CommentedConfigurationNode cn = loader.load();
+            if(cn.getValue() != null ) {
+                HashMap<String, String> gg = (HashMap<String, String>) cn.getValue();
+                passSalts = new HashMap<>();
+                for(String k : gg.keySet()){
+                    passSalts.put(UUID.fromString(k),gg.get(k));
+                }
+            }
+            loader.save(cn);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+    public void updateSalts() {
+        try {
+            ConfigurationLoader<CommentedConfigurationNode> loader = HoconConfigurationLoader.builder().setFile(saltConfig).build();
+            CommentedConfigurationNode cn = loader.load();
+            cn.setValue(passSalts);
+            loader.save(cn);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
     @Listener
     public void onConnection(ClientConnectionEvent.Login event) {
         if(flagged.contains(event.getTargetUser().getUniqueId()))
@@ -168,6 +199,8 @@ public class ServerDefender {
     @Listener
     public void onLoad(ClientConnectionEvent.Join event){
         Player plr = event.getTargetEntity();
+        if(!plr.hasPermission(verifyPermission))
+            return;
         if(flagged.contains(plr.getUniqueId())) {
             event.setMessageCancelled(true);
             Sponge.getServer().getBroadcastChannel().send(event.getMessage());
@@ -190,6 +223,8 @@ public class ServerDefender {
 
         if(event.getCause().root() instanceof Player){
             Player plr = ((Player) event.getCause().root()).getPlayer().get();
+            if(!plr.hasPermission(verifyPermission))
+                return;
             if(flagged.contains(plr.getUniqueId())) {
                 if (plr.hasPermission(verifyPermission)) {
                     if (event.getCommand().toLowerCase().contains("op ") || event.getCommand().equalsIgnoreCase("op")) {

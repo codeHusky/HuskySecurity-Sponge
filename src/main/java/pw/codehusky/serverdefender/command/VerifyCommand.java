@@ -31,11 +31,12 @@ public class VerifyCommand implements CommandExecutor {
             String passed = (String) args.getOne(Text.of("passphrase")).get();
             String hashed = null;
             try {
-                hashed = sd.pm.hashPassword(passed);
+                hashed = sd.pm.hashPassword(passed,cause);
             } catch (Exception e) {
                 e.printStackTrace();
                 return CommandResult.empty();
             }
+            System.out.println("hashed");
             UUID uid = cause.getUniqueId();
             if(!sd.flagged.contains(uid)){
                 //We're not flagged
