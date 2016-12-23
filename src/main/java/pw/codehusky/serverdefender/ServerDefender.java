@@ -41,7 +41,7 @@ import java.util.UUID;
 /**
  * Created by lokio on 12/20/2016.
  */
-@Plugin(id="serverdefender",name = "ServerDefender",version = "1.0-SNAPSHOT",description = "Secure your precious server")
+@Plugin(id="serverdefender",name = "ServerDefender",version = "0.1.1",description = "Secure your precious server")
 public class ServerDefender {
     @Inject
     private Logger logger;
@@ -55,7 +55,7 @@ public class ServerDefender {
     public HashMap<UUID,String> passHashes = new HashMap<>();
     public PasswordManager pm = null;
     public Title secNotice = Title.of(Text.of(TextColors.RED, "Security Notice!"),Text.of("Check the chat for more info."));
-
+    public String verifyPermission = "serverdefender.verify";
     private byte[] salt;
     private BanService banService = Sponge.getServiceManager().provide(BanService.class).get();
 
@@ -66,7 +66,7 @@ public class ServerDefender {
         salt = null;
         CommandSpec verifSpec = CommandSpec.builder()
                 .description(Text.of("Verify administrator accounts"))
-                .permission("serverdefender.verify")
+                .permission(verifyPermission)
                 .executor(new VerifyCommand(this))
                 .arguments(GenericArguments.string(Text.of("passphrase")))
                 .build();
@@ -133,6 +133,9 @@ public class ServerDefender {
     public void onConnection(ClientConnectionEvent.Login event) {
         if(flagged.contains(event.getTargetUser().getUniqueId()))
             flagged.remove(event.getTargetUser().getUniqueId());
+        if(!event.getTargetUser().hasPermission(verifyPermission)){
+            return;
+        }
         try {
             ClassLoader classLoader = getClass().getClassLoader();
             // A File object pointing to your GeoIP2 or GeoLite2 database
@@ -188,7 +191,7 @@ public class ServerDefender {
         if(event.getCause().root() instanceof Player){
             Player plr = ((Player) event.getCause().root()).getPlayer().get();
             if(flagged.contains(plr.getUniqueId())) {
-                if (plr.hasPermission("serverdefender.verify")) {
+                if (plr.hasPermission(verifyPermission)) {
                     if (event.getCommand().toLowerCase().contains("op ") || event.getCommand().equalsIgnoreCase("op")) {
                         securityCompromised(plr);
                         event.setCancelled(true);
