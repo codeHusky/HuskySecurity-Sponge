@@ -44,7 +44,7 @@ import java.util.UUID;
 /**
  * Created by lokio on 12/20/2016.
  */
-@Plugin(id="serverdefender",name = "ServerDefender",version = "0.1.1",description = "Secure your precious server")
+@Plugin(id="serverdefender",name = "ServerDefender",version = "0.1.5-beta",description = "Secure your precious server")
 public class ServerDefender {
     @Inject
     private Logger logger;
