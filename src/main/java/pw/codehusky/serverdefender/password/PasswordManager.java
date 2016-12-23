@@ -18,7 +18,7 @@ public class PasswordManager {
     }
     public String hashPassword(String password,Player plr) throws NoSuchAlgorithmException, InvalidKeySpecException {
         if(!sd.passSalts.containsKey(plr.getUniqueId())) {
-            sd.passSalts.put(plr.getUniqueId(), BCrypt.gensalt(10,new SecureRandom()));
+            sd.passSalts.put(plr.getUniqueId(), BCrypt.gensalt(10,SecureRandom.getInstanceStrong()));
             sd.updateSalts();
         }
         return BCrypt.hashpw(password,sd.passSalts.get(plr.getUniqueId())).replace(sd.passSalts.get(plr.getUniqueId()),"");
