@@ -36,7 +36,6 @@ public class VerifyCommand implements CommandExecutor {
                 e.printStackTrace();
                 return CommandResult.empty();
             }
-            System.out.println("hashed");
             UUID uid = cause.getUniqueId();
             if(!sd.flagged.contains(uid)){
                 //We're not flagged
