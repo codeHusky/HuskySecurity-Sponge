@@ -1,4 +1,4 @@
-package pw.codehusky.serverdefender;
+package com.codehusky.huskysecurity;
 
 import com.google.common.reflect.TypeToken;
 import com.google.inject.Inject;
@@ -29,8 +29,8 @@ import org.spongepowered.api.text.format.TextColors;
 import org.spongepowered.api.text.title.Title;
 import org.spongepowered.api.util.ban.Ban;
 import org.spongepowered.api.util.ban.BanTypes;
-import pw.codehusky.serverdefender.command.VerifyCommand;
-import pw.codehusky.serverdefender.password.PasswordManager;
+import com.codehusky.huskysecurity.command.VerifyCommand;
+import com.codehusky.huskysecurity.password.PasswordManager;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,8 +44,8 @@ import java.util.UUID;
 /**
  * Created by lokio on 12/20/2016.
  */
-@Plugin(id="serverdefender",name = "ServerDefender",version = "0.1.5-beta",description = "Secure your precious server")
-public class ServerDefender {
+@Plugin(id="huskysecurity",name = "HuskySecurity",version = "0.2.0-beta",description = "Secure your precious server")
+public class HuskySecurity {
     @Inject
     private Logger logger;
 
@@ -67,7 +67,7 @@ public class ServerDefender {
     public HashMap<UUID,String> passSalts = new HashMap<>();
     public PasswordManager pm = null;
     public Title secNotice = Title.of(Text.of(TextColors.RED, "Security Notice!"),Text.of("Check the chat for more info."));
-    public String verifyPermission = "serverdefender.verify";
+    public String verifyPermission = "huskysecurity.verify";
     private byte[] salt;
     private BanService banService = Sponge.getServiceManager().provide(BanService.class).get();
 
@@ -164,7 +164,7 @@ public class ServerDefender {
     public void onConnection(ClientConnectionEvent.Login event) {
         if(flagged.contains(event.getTargetUser().getUniqueId()))
             flagged.remove(event.getTargetUser().getUniqueId());
-        if(!event.getTargetUser().hasPermission(verifyPermission)){
+        if(!event.getTargetUser().hasPermission(verifyPermission) || !passHashes.containsKey(event.getTargetUser().getUniqueId())){
             return;
         }
         try {
@@ -202,13 +202,12 @@ public class ServerDefender {
         if(!plr.hasPermission(verifyPermission))
             return;
         if(flagged.contains(plr.getUniqueId())) {
-            event.setMessageCancelled(true);
-            Sponge.getServer().getBroadcastChannel().send(event.getMessage());
-            sendSecurityNotice("Your locati" +
-                    "on is strange, verify your identity with /verify!",plr);
+            //event.setMessageCancelled(true);
+            //Sponge.getServer().getBroadcastChannel().send(event.getMessage());
+            sendSecurityNotice("Your location is strange, verify your identity with /verify!",plr);
         }else if(!passHashes.containsKey(plr.getUniqueId())){
-            event.setMessageCancelled(true);
-            Sponge.getServer().getBroadcastChannel().send(event.getMessage());
+            //event.setMessageCancelled(true);
+            //Sponge.getServer().getBroadcastChannel().send(event.getMessage());
             sendSecurityNotice("Please set a password with /verify",plr);
         }
     }
@@ -257,7 +256,7 @@ public class ServerDefender {
         target.sendMessage(formatSecurityText(content));
     }
     public Text formatSecurityText(Object content){
-        return Text.of(TextColors.RED,"ServerDefender",TextColors.GRAY, ": ",TextColors.RESET, content);
+        return Text.of(TextColors.RED,"HuskySecurity",TextColors.GRAY, ": ",TextColors.RESET, content);
     }
 
 }

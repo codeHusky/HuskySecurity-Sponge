@@ -395,9 +395,9 @@ public class BCrypt {
 
 	/**
 	 * Cycically extract a word of key material
-	 * @param data the string to extract the data from
-	 * @param offp a "pointer" (as a one-entry array) to the current offset into data
-	 * @return the next word of material from data
+	 * @param data the string to extract the virtual from
+	 * @param offp a "pointer" (as a one-entry array) to the current offset into virtual
+	 * @return the next word of material from virtual
 	 */
 	private static int streamtoword(byte data[], int offp[]) {
 		int i;
